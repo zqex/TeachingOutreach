@@ -1,0 +1,127 @@
+#
+#   The script runs a MD simulation of a Rouse polymer model.
+#
+#   The file pull_polymers_500chains_30bonds.input should be located in the same folder as this script.
+#
+#   It constains an initial conformation of 500 spring polymers of N=30 bonds each.
+#   Each "step" is taken from a Gaussian distribution with <b^2> = 1 which corresponds to
+#   a harmonic spring of <0.5 k b^2 > = 3kT/2  => k= 3kT/<b^2> = 3
+#
+#   There are 3 types of particle in each chain, 1,2,3. 1 is fixed at 0,0, 2 is an internal
+#   particle in a polymer, and 3 is the free end.
+#
+#   The free end is influenced by an external force along the x direction, and the 
+#   magnitude of the force can be set below. We can then calculate the resulting <X>
+#   To improve statistics the average is performed of the end of all 500 polymers.
+#
+#   The movie and images visualize 20 of the chains to show their conformations.
+#
+#   average_x_ends.t  contains timestep <X> 
+#     where <X> the average over the X coordinate of the 100 chain ends that are pulled.
+#
+#   Each spring has k = 3kT/<b^2>   hence the polymer has k_poly = k/30.
+#   Hooks law suggests f = k_poly <X> = 3 kT/(30<b^2>) <X>   or <X> = 10<b^2>/kT   f  
+#   and with <b^2>=1 we get <X> = 10/kT f
+#
+#   1) Try to perform simulations with different forces 0 .. 2 to validate the relation above.
+#   2) Try to change temperature and validate the relation again.
+#
+#   Simulating the same force at different temperatures allows the entropic nature of
+#   the spring constant to be checked, since larger temperature => less extension as expected.   
+#   from the Joule Gough effect.
+#
+#
+
+#temperature kB T  in energy units
+variable temp    equal 1
+variable kT      equal 1*${temp}
+variable avgb2   equal 1                    # <b^2>
+variable kspring equal 3*${kT}/${avgb2}     # required by given <b^2>
+variable mass    equal 1
+
+#this is the force applied to the end of each chain:
+variable fx    equal 0.1
+
+variable input  string "pull_polymers_500chains_30bonds.input"
+variable output string "average_x_ends_f05.t"
+variable movie  string "moviefx0.1.avi"
+
+
+#Langevin dynamics, friction is reduced compared to rouse simulation to accelerate dynamics.
+variable friction equal 0.1
+variable tdamp equal ${mass}/${friction}
+
+#Simulation
+variable timestep equal 0.002
+variable nrun     equal 100000
+
+#random seeds
+variable rnd1 equal 39523052
+variable rnd2 equal 74574562
+
+
+dimension 3
+units		lj
+atom_style	molecular
+boundary        p p p
+thermo 100
+
+
+#neighbor settings
+neighbor 1.00 bin
+neigh_modify every 1 delay 0 check yes   page 1000000 one 100000
+
+#read input conformation
+read_data ${input}
+
+group mobile type 2 3
+group ends   type 3
+fix addf ends addforce ${fx} 0 0
+
+mass * ${mass}
+velocity all create ${temp} ${rnd1}
+
+#we need pair information up to this distance
+pair_style zero 5
+pair_coeff * *
+
+#lammps harmonic bonds U(r) = k (r-l0)^2  which does not include the factor of 1/2 for usual harmonic potentials.
+bond_style harmonic
+variable klammps equal ${kspring}/2
+bond_coeff  * ${klammps} 0
+
+#Langevin dynamics
+fix  dynamics   mobile  langevin ${temp} ${temp} ${tdamp} ${rnd2} gjf vfull
+fix  integrator mobile  nve
+
+#make movie:
+
+group vis molecule < 20
+variable color atom mol
+variable        colors string &
+                "red green blue yellow aquamarine crimson azure black darkcyan darkmagenta &
+                 darkolivegreen darkorange darkviolet darksalmon darkmagenta purple pink orange lime gray &
+                 fuchsia coral cyan "
+
+dump        video vis  movie  100 ${movie}  v_color v_color adiam 0.9 zoom 1.6 view 30 250 size 768 512
+dump_modify video backcolor white  boxcolor black
+dump_modify video amap 1 20 sa 1 23 ${colors}
+
+dump        image vis  image  20000 *.jpg   v_color v_color adiam 0.9 zoom 2.9 view 0 270  size 768 512
+dump_modify image backcolor white  boxcolor black
+dump_modify image amap 1 20 sa 1 23 ${colors}
+dump_modify image pad 6
+
+# Sample  <X> averaged over ends only.
+
+compute xpos ends property/atom xu
+compute axpos ends reduce ave c_xpos
+
+fix out ends ave/time 100 1 100 c_axpos  file ${output}
+thermo_style    custom step temp etotal   c_axpos
+
+
+timestep ${timestep}
+
+run ${nrun}
+

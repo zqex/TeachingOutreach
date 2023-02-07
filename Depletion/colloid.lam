@@ -1,0 +1,99 @@
+#
+# Illustration of depletion interactions.
+#
+#  System is a mixture of 50 big spheres and 3000 small particles.
+#        Big spheres repel big spheres
+#        Big spheres repel small particles, but with a fairly large interaction radius 
+#        Small particles does not interact with each other.
+#        System evolves with Langevin dynamics.
+#
+#  Despite the fact that big spheres are simulated as purely repulsive and hence should be
+#  randomly dispersed, they aggregate. This means there is an attractive long range
+#  interaction in the system. This emerges due to depletion interactions due to the gas
+#  of small particles. 
+#
+#  Run a simulation of both big+small, compare to the same simulation without the small particles.
+#
+
+
+
+#number of particles   (try numbers e.g. 1000,100,10,0 and see what happens)
+#small
+variable nparts  equal 1000
+
+#big keep this constant
+variable npartb  equal 50
+
+variable temp      equal 1.0
+variable friction  equal 2
+
+units		lj
+dimension 2
+atom_style	atomic
+boundary        p p p
+neighbor        6   bin
+neigh_modify    every 1 delay 0 check yes
+
+# define 2D box region
+region box block -40 40 -40 40 -0.1 0.1
+
+#create the simulation box with two types of particles
+create_box 2 box
+
+#put z=0 all the time
+fix 2d  all enforce2d
+
+#put particles with type 1 randomly into the box
+#the strange number is a seed for the random generator
+create_atoms 2 random ${npartb} 124125 box overlap 7.5 maxtry 2000
+create_atoms 1 random ${nparts} 324523 box
+
+
+#all light particles has mass 1, the brownian particle mass 20
+mass   1	1
+mass   2	20
+
+#Soft pair interaction between all particles
+pair_style soft      1.0
+pair_coeff 1 1 0.0  1.0
+pair_coeff 1 2 30.0  5.0
+pair_coeff 2 2 1000.0  5.0
+
+#velocity distribution corresponding to a temperature of 2.0
+velocity all create 2.0  34234123 dist gaussian
+
+#minimize energy first to avoid overlapping particles
+minimize 1e-4 1e-4 1000 1000
+reset_timestep 0
+
+#save images
+shell "mkdir img"
+shell "rm img/*"
+dump        img all  image  100000 img/t*.jpg    type type zoom 1.7
+dump_modify img backcolor white  boxcolor black
+dump_modify img adiam 2 5.0
+dump_modify img adiam 1 1.0
+dump_modify img pad 6
+
+#save video
+dump        video all  movie  1000 movie.avi    type type zoom 1.7
+dump_modify video adiam 1 1.0
+dump_modify video adiam 2 5.0
+dump_modify video backcolor white  boxcolor black
+
+#integrate Newtons equation of motion with stochastic kicks and friction
+#the kicks and friction model the effect of temperature
+
+variable trelax equal 1/${friction}
+fix integrator all nve
+fix dynamics   all langevin ${temp} ${temp}  ${trelax} 35928332
+
+#output time step, temperature, average kinetic and potential energy
+thermo_style custom step temp  ke pe
+thermo		1000
+
+#time step of integrator
+timestep	0.01
+
+#number of steps to run
+run		1000000

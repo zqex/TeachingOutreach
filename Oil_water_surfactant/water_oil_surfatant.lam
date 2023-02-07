@@ -1,0 +1,161 @@
+#
+#  2D simulation of DPD models of Oil / Water / Surfactant mixtures
+#
+#  Simulations are based on 4 type of beads:
+#      type 1 "water"                                        shown white
+#      type 2 "oil"                                          shown yellow
+#      type 3 hydrophilic headgroup of the surfactant dimer  shown blue
+#      type 4 hydrophobic tail group of the surfactant dimer shown green
+#
+#  The system is modelled with the following DPD A repulsion parameters: 
+#  A weak repulsion of A=25 is used between W-W, O-O and headgroup - W, and tailgroup-O interactions.
+#  A strong repulsion of A=80 is used between W-O, headgroup - O, and tailgroup-W interactions.
+#  A moderate repulsion of A=60 is used between headgroups, which are typically charged.
+#  similar a repulsion of A=50 is used between headgroup and tailgroup.
+#  Finally, a very weak repulsion of A=15 is used between to tail groups.
+#
+
+
+#Volume fractions of the three types, should sum to 1.0
+
+variable nwaterfrac equal 0.40    #Water
+variable noilfrac   equal 0.40    #Oil
+variable nsurffrac  equal 0.20    #Surfactant
+variable basename string "water0.40_oil0.40_surfactant0.20"
+
+#variable nwaterfrac equal 0.70    #Water
+#variable noilfrac   equal 0.00    #Oil
+#variable nsurffrac  equal 0.30    #Surfactant
+#variable basename string "water0.7_oil0.0_surfactant0.30"
+
+
+#variable nwaterfrac equal 0.7     #Water
+#variable noilfrac   equal 0.15    #Oil
+#variable nsurffrac  equal 0.15    #Surfactant
+#variable basename string "water0.7_oil0.15_surfactant0.15"
+
+#Simulations box of 40 x 40
+variable lbox    equal 40
+
+#standard density 3 for DPD models
+variable dens    equal 3
+
+#temperature in reduced units
+variable temp equal 1.0
+
+#number of integration steps
+variable steps equal 20000
+
+#seeds for random numbers
+variable RND1 equal 3523524
+variable RND2 equal 4634331
+variable RND3 equal 5734574
+variable RND4 equal 2342356
+variable RND5 equal 1352352
+
+
+#set up basic simulation stuff
+units		lj
+dimension       2
+boundary        p p p
+comm_modify     vel yes
+neighbor 0.5 bin
+neigh_modify every 1 delay 0 check yes
+
+#Generate box and system
+variable lhalf equal ${lbox}/2
+region box block -${lhalf} ${lhalf} -${lhalf} ${lhalf} -0.5 0.5
+molecule        surftem surfactant.mol
+atom_style	template surftem
+
+#4 is number of types of atoms in the simulation
+create_box 4 box bond/types 1
+
+#total number of beads in the simulation
+variable npart equal ${dens}*${lbox}*${lbox}*1
+
+#Number of water, oil, surfactants
+variable nwater equal round(${nwaterfrac}*${npart})
+variable noil   equal round(${noilfrac}*${npart})
+variable nsurf  equal round(${nsurffrac}*${npart}/2)
+
+#Add water
+create_atoms 1 random ${nwater} ${RND1} box
+
+#Add oil
+create_atoms 2 random ${noil}   ${RND1} box
+
+#add surfactants
+create_atoms 0 random ${nsurf}  ${RND3} box mol surftem  ${RND3}
+
+#visualize
+group vis type 1 2 3 4    #  alt
+#group vis type 2 3 4     # kun olie + surfactanter
+
+group groupoil type 2 
+group groupsurfactant type 3 4
+
+#all particles has mass 1
+mass   *        1
+
+# Dissipative-particle-dynamics
+# high value => high repulsion  e.g. 80
+# low value => low repulsion    e.g. 25
+# When energy is minimized structures are formed that minimize the repulsion.
+#
+
+pair_style         dpd  ${temp} 1.0 ${RND4}
+pair_coeff         1 1 25  4.5   #water-water
+pair_coeff         1 2 80  4.5   #water-oil
+pair_coeff         1 3 25  4.5   #water-surfactant head
+pair_coeff         1 4 80  4.5   #water-surfacetant tail
+
+pair_coeff         2 2 25  4.5   #oil-oil
+pair_coeff         2 3 80  4.5   #oil-surfactant head group
+pair_coeff         2 4 25  4.5   #oil-surfactant tail group
+
+pair_coeff         3 3 60  4.5   #surfactant head - surfactant head group
+pair_coeff         3 4 50  4.5   #surfactant head - surfactant tail group
+
+pair_coeff         4 4 15  4.5   #surfactant tail - surfactant tail group
+
+#bonds are springs with large spring constant and equilibrium distance 0.75
+bond_style      harmonic
+bond_coeff      * 500 0.75
+
+#minimize energy of initial state
+minimize 1e-3 1e-3 1000 1000
+reset_timestep 0
+
+#make pictures
+shell "mkdir img"
+dump        img vis  image  500 img/${basename}_*.jpg    type type  bond type none adiam 0.5 zoom 1.7
+dump_modify img acolor 1 lightblue   #vand partikler
+dump_modify img adiam  1 0.05
+dump_modify img acolor 2 gold        #olie partikler
+dump_modify img acolor 3 darkblue    #hoved gruppe af surfaktant
+dump_modify img acolor 4 green       #hale gruppe af surfaktant
+dump_modify img backcolor white  boxcolor black
+dump_modify img pad 6
+
+#save video
+dump        video vis  movie  20 ${basename}.avi    type type  bond type none adiam 1.0 zoom 1.7
+dump_modify video acolor 1 lightblue   #vand partikler
+dump_modify video adiam  1 0.05
+dump_modify video acolor 2 gold        #olie partikler
+dump_modify video acolor 3 darkblue    #hoved gruppe af surfaktant
+dump_modify video acolor 4 green       #hale gruppe af surfaktant
+dump_modify video backcolor white  boxcolor black
+
+thermo    100
+thermo_style custom  step  temp  epair ebond   density 
+
+#fixes for at køre simulation
+fix integrator all nve
+fix langevin all langevin ${temp} ${temp} 0.5 ${RND5}
+fix 2d         all enforce2d
+
+# timestep
+timestep	0.01
+
+run ${steps}

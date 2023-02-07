@@ -1,0 +1,92 @@
+#
+#  Deform a lattice network
+#
+#  The lattice sites have no dynamics, but just follow the imposed deformation.
+#
+
+#number of steps to perform the deformation
+variable  nrun   equal 1000
+
+#uniaxial deformation  (See fix deform below)
+#variable  lambda    equal 2
+
+#Pure shear deformation    (See fix deform below)
+variable  lambda    equal 2
+
+#Lattice length scale from the input file.
+variable  a      equal 1                    
+
+variable  inputfile string "lattice20x20x20.input"
+
+
+#definition of spring potential
+variable kspring equal 100
+variable keq     equal ${a}
+
+shell "mkdir conf img"
+
+units              lj
+atom_style         bond
+
+neighbor           ${a} bin
+neigh_modify       every 1 delay 0 check yes
+
+read_data ${inputfile}
+mass * 1.0
+
+group vis       type 1 2
+
+compute bdist      all  bond/local dist
+compute bmax all   reduce max c_bdist
+compute bmin all   reduce min c_bdist
+
+
+variable twoa      equal 2*${a}
+pair_style         zero ${twoa}
+pair_coeff         * *
+
+bond_style         harmonic
+variable            klammps equal 0.5*${kspring}
+bond_coeff         * ${klammps} ${keq}
+
+shell mkdir img
+dump    visualization vis image 20 img/*.png mol type   adiam 1.0  bond atom 1.0  zoom 0.8  view 90 -90
+dump_modify visualization pad 6 first yes
+
+variable sigmaxx equal -c_thermo_press[1]
+variable sigmayy equal -c_thermo_press[2]
+variable sigmazz equal -c_thermo_press[3]
+variable sigmaxy equal -c_thermo_press[4]
+variable sigmaxz equal -c_thermo_press[5]
+variable sigmayz equal -c_thermo_press[6]
+
+variable lambda  equal lx/vol^(1.0/3.0)
+
+thermo     100
+thermo_style custom step temp press pe c_bmin c_bmax     &
+v_lambda                                              &
+v_sigmaxx v_sigmayy v_sigmazz                         &
+v_sigmaxy v_sigmayz v_sigmayz     vol
+
+fix savestress all ave/time 10 1 10                   &
+v_lambda                                              &
+v_sigmaxx v_sigmayy v_sigmazz                         &
+v_sigmaxy v_sigmayz v_sigmayz                         &
+file "stress.t"  title1 "% step stress tensor xx yy zz xy xz yz components"
+
+variable pe equal pe
+fix saveenergy all ave/time 10 1 10   v_lambda v_pe  file "energy.t"
+
+#stretch every 10 steps.
+
+#This line does unaxial deformation
+fix def all deform 1 x scale ${lambda} y volume z volume  remap x  flip no
+
+#bulk deformation 
+#variable stretch equal ${Vend}^(1/3)
+#fix def all deform 1 x scale ${stretch} y ${stretch} z ${stretch}  remap x  flip no
+
+thermo     100
+
+run ${nrun}
+

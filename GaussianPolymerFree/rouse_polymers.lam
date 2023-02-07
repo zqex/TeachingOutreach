@@ -1,0 +1,152 @@
+#
+#  The script runs a MD simulation of a Rouse polymer model with Langevin dynamics.
+#  See Doi chapter 9.3.3 for details on this model.
+#
+#  The polymer is modelled as N springs in series. Thus each chain has N+1 particles.
+#  The file rouse_polymers_200chains_20bonds.input should be located in the same
+#  folder as this script, since it constains the starting configuration of the simulation.
+#  The input file was prepared with steps such that <b^2> = 1 
+#
+#  We simulate M=200 chains simultaneously to reduce the fluctuations of the averages
+#  that the script outputs. More chains reduce the fluctuations even further, but
+#  also increases run time. Alternative run the simulation for longer to get better
+#  statistics.
+#
+#  During the simulation, the script generate the following files:
+#
+#  g1.msd.t contains step  MSD(t)=<(R(0)-R(t))^2>   averaged over all particles.
+#
+#    time=timestep * step = 0.002*step
+#
+#    for ballistic dynamics MSD(t) = (vt)^2    for drift velocity v
+#    for diffusive dynamics MSD(t) = D t/4     
+#    for sub-diffusive dynamics MSD(t) = const * t^alpha
+#    plot this in log-log representation to see the different powerlaw regimes.
+#
+#  averageR2 constaints step and <R^2>
+#
+#    This should fluctuate around the equilibrium <R^2> = <b^2> N
+#
+#  averagebondlength constains step and <b^2>
+#  
+#    We expect that <b^2> fluctuate around 1, but this depends on the spring constant and temperature.
+#
+#  energy.t contains step kinetic+potential energy / number of particles
+#
+#    Kinetic energy per particle is 2 kT/2 because 2 degrees of freedom for velocity
+#    Potential energy per bond   is 2 kT/2 because 2 degrees of freedom for spring.
+#    Hence the total energy er particle result is expected to be two.
+#
+
+
+variable temp   equal 1
+variable kT     equal 1*${temp}        # temperature kB T  in energy units
+variable Nspring equal 10
+variable input  string "rouse_polymers_100chains_10bonds.input"
+
+#derive 2D spring constant
+variable bond2   equal 1                         # <b^2>
+variable kspring equal 2*${kT}/${bond2}          # dimension*kT/<b^2>
+
+#Langevin dynamics
+variable mass   equal 0.01                                     
+variable friction equal 1
+variable tdamp equal ${mass}/${friction}         # this is needed by LAMMPS
+
+variable period    equal 2*3.1415*sqrt(${kspring}/${mass})                            # harmonic oscillator w = sqrt(k/m)
+variable taubond   equal ${friction}*${bond2}/${kT}*1/(3*3.1415*3.1415)
+variable tauchain  equal ${taubond}*${Nspring}^2
+
+print "tau bond = ${taubond}"              # this the fundamental clock of diffusive motion, the time it takes a bond to move its own size
+print "tau chain= ${tauchain}"             # time scale where a chain has moved its own size, and polymer is in a new conformation
+print "T= ${period}"                       # time scale of harmonic oscillation (relevant for timestep)
+print "Friction time scale = ${tdamp}"     # time scale for cross-over from ballistic to diffusive dynamics.
+
+#Simulation
+variable timestep equal 0.002
+variable nrun     equal 10000000
+
+#random seeds
+variable rnd1 equal 39523052
+variable rnd2 equal 74574562
+
+#clean up potential old data from previous runs.
+shell "rm *.jpg *.avi *.t log.lammps"
+
+thermo 100
+
+
+dimension 2
+units		lj
+atom_style	molecular
+boundary        p p p
+
+#neighbor settings
+neighbor 1.00 bin
+neigh_modify every 1 delay 0 check yes 
+
+#read in initial configuration
+read_data ${input}
+
+#setup mass and generate a random velocity from a Maxwell-Boltzmann distribution.
+mass * ${mass}
+velocity all create ${temp} ${rnd1}
+
+#we need pair information up to this distance for calculating bonds
+pair_style zero 5
+pair_coeff * *
+
+#lammps harmonic bonds U(r) = k (r-l0)^2  which does not include the factor of 1/2 for usual harmonic potentials.
+bond_style harmonic
+variable klammps equal ${kspring}/2
+bond_coeff  * ${klammps} 0
+
+#Set up dynamics
+fix 2d all enforce2d
+fix dynamics all langevin ${temp} ${temp} ${tdamp} ${rnd2}  gjf vfull
+fix  integrator  all nve
+
+#visualize but only first 20 molecules for video.
+group vis molecule < 20
+
+variable color atom mol
+variable        colors string &
+                "red green blue yellow aquamarine crimson azure black darkcyan darkmagenta &
+                 darkolivegreen darkorange darkviolet darksalmon darkmagenta purple pink orange lime gray &
+                 fuchsia coral cyan "
+
+dump        video vis  movie  100 movie.avi    v_color v_color adiam 0.9 zoom 1.9 view 0 90  size 512 512
+dump_modify video backcolor white  boxcolor black
+dump_modify video amap 1 20 sa 1 23 ${colors}
+
+dump        image vis  image  20000 selected_*.jpg   v_color v_color adiam 0.9 zoom 1.9 view 0 90  size 512 512
+dump_modify image backcolor white  boxcolor black
+dump_modify image amap 1 20 sa 1 23 ${colors}
+
+dump        image2 all  image  20000 all_*.jpg   v_color v_color adiam 0.9 zoom 1.9 view 0 90  size 512 512
+dump_modify image2 backcolor white  boxcolor black
+dump_modify image2 amap 1 200 sa 1 23 ${colors}
+
+
+# Sample observables:
+
+compute bdist all bond/local dist
+compute b2avg all reduce avesq c_bdist
+
+compute g1         all msd com yes
+compute molchunk   all chunk/atom molecule
+compute rgmol      all gyration/chunk molchunk  tensor
+variable avgr2     equal 6*(ave(c_rgmol[1])+ave(c_rgmol[2]))          #Lammps can not calculate <R^2> directly, but we know that <R^2> = 6 <Rg^2> in 2D.
+variable energy    equal etotal
+
+# output observables
+thermo_style    custom step temp etotal c_b2avg  c_g1[4] v_avgr2
+
+fix out1  all ave/time  100 1 100  c_g1[4]        ave one file g1.msd.t               title1 "#MSD=<[R(t)-R(0)]^2)>" start 200        
+fix out2  all ave/time  100 1 100  v_avgr2        ave one file averageR2.t            title1 "#<Rg^2> = <b^2> N in 2D" 
+fix out3  all ave/time  100 1 100  c_b2avg        ave one file averagebondlength.t    title1 "#<bondl ength^2> we espect 1 by definition"
+fix out4  all ave/time  100 1 100  v_energy       ave one file averageenergy.t        title1 "#Energy per particle = 4 * kT/2 by equipartition"
+
+timestep ${timestep}
+run ${nrun}
+

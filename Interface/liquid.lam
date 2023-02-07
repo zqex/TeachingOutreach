@@ -1,0 +1,142 @@
+#
+#  2D simulation of LJ liquid with gravity.
+#
+#  The LJ = Lennart-Jones potential is a model for van der Waals liquids.
+#  It has an attractive well of depth epsilon, hence particles likes to be
+#  in contact with other particles. This creates a cohesive bulk energy, 
+#  and thus a surface tension at the free interface.
+#
+#  If the temperature is too low 5ha5 iw, T<epsilon, then the LJ liquid
+#  will freezes into a solid. If its too high, it will evaporate.
+#
+#  Particles are affected by a "gravitational force" pointing down, to avoid
+#  falling through the simulation box, I have added a repulsive wall of frozen
+#  LJ particles at the bottom of the box. I added a thin layers of disordered
+#  particles. The LJ liquid will form layers at a planaer interface. The
+#  disordered wall should reduce this effect.
+#
+#  The liquid interface is not exactly smooth, but fluctuates. The script
+#  outputs the density profile along y. Large oscillations can be seen close
+#  the wall, since LJ beads pack in layers.
+#
+
+#depth of attractive well in reduced units.  
+variable epsilon equal 1
+
+#gravitational force pointing down:
+variable gravityforce equal -10
+
+#Temperature in reduced units.
+# The LJ particles crystallize unless T>epsilon.  Try eg. 2 .. 5
+variable temp equal 3.0
+
+
+#basename for output files
+variable basename string "gravity10_epsilon1_temp3"
+
+
+#number of particles
+variable npart equal 3000
+
+#Simulations box
+variable lbox    equal 80
+variable hbox    equal 40
+
+#number of integration steps for equilibration and also for sampling (multiple of 100)
+variable steps equal 100000
+
+#seeds for random numbers
+variable RND1 equal 3523524
+variable RND2 equal 4634331
+variable RND3 equal 5734574
+variable RND4 equal 2342356
+variable RND5 equal 1352352
+
+
+
+#set up basic simulation stuff
+units		lj
+dimension       2
+boundary        p f p     # periodic in x, fixed in y due to wall.
+neighbor 1.5 bin
+neigh_modify every 1 delay 0 check yes
+
+#Generate box and system
+
+variable xlo equal  -${lbox}/2
+variable xhi equal   ${lbox}/2
+
+variable ylo    equal  -${hbox}/2
+variable yhi    equal   ${hbox}/2
+variable ylower equal ${ylo}+4.0
+variable ywall  equal ${ylo}+2.0
+
+region box  block ${xlo} ${xhi} ${ylo}    ${yhi}   -0.5 0.5   # full box for system
+region box2 block ${xlo} ${xhi} ${ylower}    10     -0.5 0.5   # box for liquid 
+region box3 block ${xlo} ${xhi} ${ywall}  ${ylower} -0.5 0.5   # box for frozen interface
+region box4 block ${xlo} ${xhi} ${ylo}    ${ywall}  -0.5 0.5   # box for making wall.
+
+
+atom_style	atomic
+create_box 2 box 
+create_atoms 1 random ${npart} ${RND1} box2 overlap 1.0 maxtry 200
+
+create_atoms 2 random 100 ${RND2} box3 overlap 0.7    maxtry 100
+lattice sq 1.0 
+create_atoms    2 region box4
+
+group mobile type 1
+group fixed  type 2
+
+fix freeze fixed setforce 0 0 0
+
+mass   *       1
+
+# LJ particles.
+pair_style         lj/cut 2.5
+pair_coeff         * * ${epsilon} 1         # epsilon = sigma = 1
+
+#no interaction between wall particles.
+neigh_modify exclude  group fixed fixed
+
+#minimize energy of initial state to avoid overlap
+#minimize 1e-5 1e-5 2000 2000
+reset_timestep 0
+
+#make pictures
+shell "mkdir img"
+shell "rm img/*.jpg"
+dump        img all  image  10000 img/${basename}_*.jpg    type type  adiam 0.5 zoom 3.7  size 1024 512
+dump_modify img backcolor white  boxcolor black
+dump_modify img pad 6
+
+#save video
+dump        video all  movie  500 ${basename}.avi    type type  adiam 1.0 zoom 3.7   size 1024 512
+dump_modify video backcolor white  boxcolor black
+
+#need to measure temperature for mobile beads only
+compute realtemp mobile temp
+
+thermo    100
+thermo_style custom  step  c_realtemp  epair  
+
+
+fix 2d         mobile  enforce2d                                    # set z=0 vz=0
+fix gravity    mobile  addforce 0 ${gravityforce} 0                 # adds gravitational force
+fix integrator mobile  nve                                          # moves particles
+fix langevin   mobile  langevin ${temp} ${temp} 0.02 ${RND5}        # adds friction + stochastic kicks.
+
+# timestep
+timestep	0.0005
+
+run ${steps}
+
+#sample density of liquid along y axis:
+
+variable binsize equal ${hbox}/100
+compute dens mobile chunk/atom bin/1d y center ${binsize}
+variable nsample equal ${steps}/100
+fix fdens all ave/chunk 100 ${nsample} ${steps}  dens density/number norm sample title1 "#number density along z" file ${basename}_rho.y
+
+run ${steps}
+
