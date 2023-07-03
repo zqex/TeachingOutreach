@@ -1,0 +1,66 @@
+units		lj
+dimension 2
+atom_style	atomic
+boundary        p p p
+#particle interact with other particles within a max distance of 6
+neighbor        6   bin
+neigh_modify    every 1 delay 0 check yes
+
+# define 2D box region
+region box block -20 20 -20 20 -0.1 0.1
+
+#create the simulation box with two types of particles
+create_box 2 box
+
+#put z=0 all the time
+fix 2d  all enforce2d
+
+#create one particle of type 2 which is our brownian particle
+create_atoms 2 single 0 0 0
+
+#all light particles has mass 1, the brownian particle mass 50
+mass   1	1
+mass   2	50
+
+#Soft pair interaction between all particles
+pair_style soft      1.0
+pair_coeff 1 1 10.0  1.0
+pair_coeff 1 2 10.0  5.0
+pair_coeff 2 2 10.0  5.0
+
+#save images
+shell "mkdir img"
+shell "rm img/*"
+dump        img all  image  10000 img/t*.jpg    type type zoom 1.7
+dump_modify img backcolor white  boxcolor black
+dump_modify img adiam 2 5.0
+dump_modify img adiam 1 1.0
+dump_modify img pad 6
+
+#save video
+dump        video all  movie  10000 movie.avi    type type zoom 1.7
+dump_modify video adiam 1 1.0
+dump_modify video adiam 2 5.0
+dump_modify video backcolor white  boxcolor black
+
+#integrate Newtons equation of motion with stochastic kicks and friction
+#the kicks and friction model the effect of temperature
+
+variable temp      equal 1.0
+variable friction  equal 10
+
+#Time scale of relaxation = mass/friction
+variable trelax    equal 50/${friction}
+
+fix integrator all nve
+fix dynamics   all langevin ${temp} ${temp}  ${trelax} 359283
+
+#output time step, temperature, average kinetic and potential energy
+thermo_style custom step temp  ke pe
+thermo		100
+
+#time step of integrator
+timestep	0.001
+
+#number of steps to run
+run		10000000
