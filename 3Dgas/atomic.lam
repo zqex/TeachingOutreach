@@ -1,0 +1,275 @@
+#
+#  Simulates an Argon gas at standard conditions.
+#
+#
+#  units SI
+#
+#   mass = kilograms
+#   distance = meters
+#   time = seconds
+#   energy = Joules
+#   velocity = meters/second
+#   force = Newtons
+#   temperature = Kelvin
+#   pressure = Pascals
+#
+# Define some terms for translating units to SI
+#
+variable onemol     equal 6.02214076e23   #1mol = .. number
+variable oneamu     equal 1.66053904e-27  #1amu = .. kg
+variable onenano    equal 1e-9            # e.g. 1nm = 1e-9m
+variable onepico    equal 1e-12           # e.g. 1pm = 1e-12m
+variable onefemto   equal 1e-15           # e.g. 1fm = 1e-15m 
+
+#gas constant in the present units (=Boltzmann)
+variable R   equal 8.31446261815324/${onemol}     # 8.31446 J/ (K mol)
+
+
+#number of gas particles to simulate
+variable nparticle equal 1000
+print "Particles        : ${nparticle}"
+
+#target pressure
+variable Ptarget equal 101000  # Pa
+print "Target Pressure  : ${Ptarget}"
+
+#target temperature
+variable Ttarget equal 300     # K
+print "Target Temp.     : ${Ptarget}"
+
+
+#mass of molecule Ar  39.947 amu
+variable amumass equal 39.947
+variable mass  equal ${amumass}*${oneamu}
+print "Mass of particle : ${mass} kg = ${amumass} amu"
+
+#vdW radius radius argon 188pm
+variable vdwradius equal 188
+variable radius equal ${vdwradius}*${onepico}
+print "vdW radius       : ${radius}m  = ${vdwradius} pm"
+
+
+#
+# Calculate density at target state
+# For an ideal gas PV = NRT => rho = N/V = P/[RT]
+#
+
+variable rho     equal ${Ptarget}/(${R}*${Ttarget})
+variable rhonano equal ${rho}*${onenano}^3
+print "Density          : ${rho} particles/m^3 = ${rhonano} particles/nm^3"
+
+#we artificially increase the radius to have more collisions visually.
+variable scale equal 3
+
+#Define simulation temperature. These could deviate from the target if we want to heat up a standard state.
+variable temp equal ${Ttarget}
+
+#Determine volume of simulation box. Again this could deviate if we want to compress a standard state.
+variable volume  equal ${nparticle}/${rho}
+variable volumenano equal ${volume}/${onenano}^3
+print "Volume           : ${volume} m^3 = ${volumenano} nm^3"
+
+
+#
+# Below we derive various parameters which are needed during the simulation
+#
+
+variable depth    equal 10*${onenano}
+variable lbox     equal (${volume}/${depth})^(1/2)
+variable lboxnano equal ${lbox}/${onenano}
+print "Linear dimension :  ${lboxnano}nm x ${lboxnano}nm x 10nm"
+
+#typical energy of particle
+variable RT  equal ${R}*${temp}
+
+#Number of integration steps
+variable eqsteps equal 0
+variable steps equal 1000000                            #should be multiple of 10
+
+#time step in fs 
+
+variable timestepfemto equal 1
+variable timestep equal ${timestepfemto}*${onefemto}
+print "Timestep         : ${timestep} s = ${timestepfemto}fs"
+variable every1fs  equal 1
+
+#
+# Distance within we track neighbors for resolving collisions
+#
+
+variable neigh     equal 10*${radius}*${scale}
+variable neighnano equal ${neigh}/${onenano}
+print "Keeping track of neighbours within distance ${neigh}m = ${neighnano}nm"
+
+
+#seeds til tilfældige tal brugt forskellige steder.
+variable RND1 equal 3523524
+variable RND2 equal 4634331
+variable RND3 equal 5734574
+variable RND4 equal 2342356
+variable RND5 equal 1352352
+variable RND6 equal 4745712
+
+#set up basic simulation stuff
+
+
+units		si
+dimension       3
+boundary        f f f
+neighbor        ${neigh} bin
+neigh_modify    every 1 delay 0 check yes
+
+#Generate box and system
+variable lhalf equal ${lbox}/2
+variable ldhalf equal ${depth}/2
+region box block -${lhalf} ${lhalf} -${lhalf} ${lhalf} -${ldhalf} ${ldhalf}
+
+atom_style	atomic  
+
+create_box 1 box
+
+fix xwalls all wall/reflect xlo EDGE xhi EDGE  ylo EDGE yhi EDGE  zlo EDGE zhi EDGE
+
+#add gas molecules
+create_atoms 1 random ${nparticle} ${RND4} box
+
+#Generate smallbox and system
+variable lsmall equal 0.3*${lbox}/2
+region boxsmall block -${lsmall} ${lsmall} -${lsmall} ${lsmall} -${ldhalf} ${ldhalf}
+
+#visualize
+group vis  type 1         #all
+group vis2 region boxsmall
+
+#all particles has mass 1
+mass   1        ${mass}
+
+variable rcut equal 2*${scale}*${radius}
+
+#Soft pair interaction between all particles
+pair_style soft  ${rcut}
+pair_coeff * * 1e-20
+
+#minimize conformation to avoid overlaps.
+minimize 1e-3 1e-3 100 100
+reset_timestep 0 
+
+#
+#reduced kinetic energy   KE per molecule per 0.5 RT = <K>/ 0.5nRT
+# we expect <K>= f/2 nRT, hence this estimates the number of degrees of freedom
+#
+variable redU  equal ke/(0.5*${RT}*${nparticle})
+
+thermo    100
+thermo_style custom  step  temp  press ke pe  etotal  enthalpy  v_redU
+
+#create velocity distribution
+velocity all create ${temp}  ${RND5} dist gaussian
+
+#fixes for at køre simulation
+fix integrator all nve
+
+# tidsskridt (fs)
+timestep	${timestep}
+
+#make pictures
+#reduced kinetic energy per particle. 
+variable   ke       atom 0.5*mass*(vx*vx+vy*vy+vz*vz)/(${RT})
+variable   ke3      atom 0.5*mass*(vx*vx+vy*vy+vz*vz)/(3*${RT})
+
+variable   kex      atom 0.5*mass*(vx*vx)/(${RT})
+variable   key      atom 0.5*mass*(vy*vy)/(${RT})
+variable   kez      atom 0.5*mass*(vz*vz)/(${RT})
+
+variable   vx       atom vx
+variable   vy       atom vy
+variable   vz       atom vz
+
+#<vx>, <vx^2>, <vx^3>, <vx^4> but using all 3 components.
+variable   vmean    atom (vx+vy+vz)/3
+variable   v2       atom (vx*vx+vy*vy+vz*vz)/3
+variable   v3       atom (vx*vx*vx+vy*vy*vy+vz*vz*vz)/3
+variable   v4       atom (vx*vx*vx*vx+vy*vy*vy*vy+vz*vz*vz*vz)/3
+
+compute vavg  all reduce ave v_vmean
+compute vavg2 all reduce ave v_v2
+compute vavg3 all reduce ave v_v3
+compute vavg4 all reduce ave v_v4
+
+#color code based on kinetic energy per particle, but reduced by RT
+variable   kelow  equal 0.0
+variable   ke1  equal   2
+variable   ke2  equal   4
+variable   kehigh equal 5
+
+compute kemin all reduce min v_ke
+compute kemax all reduce max v_ke
+variable vmax equal 3.0*sqrt(${RT}/${mass})     # 2 * sqrt(<v^2>)
+
+thermo_style custom  step  temp  press ke pe  etotal  enthalpy  v_redU
+
+shell "mkdir img"
+shell "rm img/*"
+variable visdiam equal 1.5*${rcut}
+dump        img vis  image  10000 img/t*.jpg    v_ke type  adiam ${visdiam} zoom 1.4
+dump_modify img backcolor white  boxcolor black
+dump_modify img pad 6
+dump_modify img amap ${kelow} ${kehigh} ca 0.0 4 min blue ${ke1} red ${ke2} orange max white
+
+#save video
+dump        video vis  movie  1000 movie_gas_all_atoms.avi    v_ke type adiam ${visdiam} zoom 1.4  view 0 0 
+dump_modify video backcolor white  boxcolor black
+dump_modify video amap ${kelow} ${kehigh} ca 0.0 4 min blue ${ke1} red ${ke2} orange max white
+
+#save video
+dump        video2 vis2  movie  1000 movie_gas_few_atoms.avi    v_ke type adiam ${visdiam} zoom 1.4  view 0 0 
+dump_modify video2 backcolor white  boxcolor black
+dump_modify video2 amap ${kelow} ${kehigh} ca 0.0 4 min blue ${ke1} red ${ke2} orange max white
+
+
+#sample histograms
+variable nsave equal ${steps}/100
+variable nsample equal ${steps}/10000
+
+#changing number of bins, remember to fix shell commands at the end.
+fix histo1 all ave/histo 50 ${nsave} ${steps}  -${vmax} ${vmax} 50   v_vx  v_vy  v_vz      mode vector    file velocity.h  
+fix histo2 all ave/histo 50 ${nsave} ${steps}     0        3.0  50   v_kex v_key v_kez     mode vector    file ekin_xyz.h
+
+#histogram should be adjusted for  binsize.
+variable velocitybinwidth equal 2*${vmax}/50
+
+#save macrostate of gas as function of time
+variable statetemp   equal temp
+variable statepress  equal press
+variable statevolume equal vol
+variable stateU      equal ke
+variable stateH      equal ke+vol*press
+
+fix outstate1  all ave/time 10 ${nsample} ${nsave}   v_statetemp v_statepress v_statevolume v_stateU v_stateH v_redU  file state.avg &
+              title1 "# Tidsskridt temperatur tryk volume U H  U/0.5KT"
+              
+#save velocity statistics.
+fix outstate2  all ave/time 10 ${nsample} ${steps}   c_vavg  c_vavg2  c_vavg3  c_vavg4                                file velocity.avg  &
+              title1 "# Tidsskridt <vx>  <vx^2>  <vx^3>   <vx^4>"
+
+
+#save velocity statistics.
+fix outstate3  all ave/time 100 ${nsample} ${nsave}  c_kemin c_kemax  file ke.min.max title1 "# Tidsskridt  kemin kemax"
+
+
+run ${steps}
+
+#
+# Clean up histogram files for easy plotting.
+#
+
+unfix histo1
+unfix histo2
+
+shell "tail -n50 velocity.h    | perl -p -e 's/(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/$2 $4/;' > velocity.histogram" 
+shell "tail -n50 ekinreduced.h | perl -p -e 's/(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/$2 $4/;' > ekinreduced.histogram" 
+
+##shell rm velocity.h
+##shell rm ekinreduced.h
+
+
