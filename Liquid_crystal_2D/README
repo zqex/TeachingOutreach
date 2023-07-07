@@ -22,4 +22,5 @@ and hence does not provide a force to push particles that are on top of each oth
 
 
 
+pair_style lj/cut/soft   requires LAMMPS compiled with FEP package.
 
