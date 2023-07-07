@@ -1,0 +1,1 @@
+LAMMPS Simulation of a 2D model of cell membranes. Lipid moleucles are modelled as (H)-(T)-(T) rods, where Head is hydrophilic, Tail is hydrophobic.
