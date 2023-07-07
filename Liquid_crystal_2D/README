@@ -15,8 +15,10 @@ This does not really work either, rods appears to pack parallel and it does not 
 should produce global nematic order during a short simulation.
 
 I thought of cheating. We could change the type of the first and last beads of the rods, and apply two external forces in opposite directions
-to align the molecules. But it would always align in the same direction, which is also annoying..
-
+to align the molecules. But it would always align in the same direction, which is also annoying.  lc_polar.tem is a template that adds different
+types of beads for the head/tail and LiquidCrystal2D_pull.lam applies forces -2x and +2x to the head/tail where x is a unit vector along x.
+This helps in making the nematic order happen, but there are funky defects due overlapping molecules, because the soft potentials are flat at r=0,
+and hence does not provide a force to push particles that are on top of each other away.
 
 
 
