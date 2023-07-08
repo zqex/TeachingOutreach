@@ -1,0 +1,95 @@
+#
+#  2D lattice with two cells of NxN vertices in contact surrounded by a boundary
+#
+#
+
+#number of steps to perform the deformation
+variable  nrun   equal 10000
+
+variable templeft  equal 0.5
+variable tempright equal 2.0
+
+variable  inputfile string "lattice40.input.gz"
+
+#definition of spring potential
+variable kspring equal 100
+variable keq     equal 1.0
+
+variable SEED1 equal 34923842
+variable SEED2 equal 63245432
+
+shell "mkdir img"
+
+units              lj
+dimension          2
+atom_style         bond
+
+neighbor           4.0 bin
+neigh_modify       every 1 delay 0 check yes
+
+read_data ${inputfile}
+mass * 1.0
+
+fix 2d all enforce2d 
+
+group gvis       type 1 2 3
+group gleft      type 1
+group gright     type 2
+group gboundary  type 3
+group gmobile    type 1 2
+
+pair_style         zero 4.0
+pair_coeff         * *
+
+bond_style         harmonic
+variable           klammps equal 0.5*${kspring}
+bond_coeff         * ${klammps} ${keq}
+
+
+
+#shell mkdir img
+dump        visualization gvis movie 200    motion.avi   type type   adiam 1.0  bond atom 1.0  zoom 1.8  view 0 0  size 1024 768
+dump_modify visualization pad 6 first yes
+
+compute ekin  all ke/atom
+dump        visualization2 gvis movie 200    ekin.avi   c_ekin type   adiam 1.0  bond atom 1.0  zoom 1.8  view 0 0  size 1024 768
+dump_modify visualization2 backcolor white  boxcolor black pad 6  first yes
+dump_modify visualization2 amap 0 16 ca 0.0 4 min blue 4.0 red 9.0 orange max white
+
+compute ebond  all pe/atom bond
+dump        visualization3 gvis movie 200    ebond.avi   c_ebond type   adiam 1.0  bond atom 1.0  zoom 1.8  view 0 0  size 1024 768
+dump_modify visualization3 backcolor white  boxcolor black pad 6  first yes
+dump_modify visualization3 amap 0 16 ca 0.0 4 min blue 4.0 red 9.0 orange max white
+
+variable eatom  atom  c_ekin+c_ebond
+dump        visualization4 gvis movie 200    eatom.avi   v_eatom type   adiam 1.0  bond atom 1.0  zoom 1.8  view 0 0  size 1024 768
+dump_modify visualization4 backcolor white  boxcolor black pad 6  first yes
+dump_modify visualization4 amap 0 16 ca 0.0 4 min blue 4.0 red 9.0 orange max white
+
+
+
+#
+#  Create two different temperature left and right.
+#
+
+fix integrator   gmobile nve
+fix thermostat1  gleft   langevin  ${templeft}  ${templeft}      1.0  ${SEED1}
+fix thermostat2  gright  langevin  ${tempright} ${tempright}     1.0  ${SEED2}
+
+thermo     100
+timestep 0.01
+
+run ${nrun}
+
+#
+#  Now let temperature equlibrate
+#
+
+unfix thermostat1
+unfix thermostat2
+
+run ${nrun}
+
+
+
+

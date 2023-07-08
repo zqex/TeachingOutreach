@@ -1,0 +1,12 @@
+Simulation of a 2D lattice where the temperature of the right and left lattice can be controlled and the
+corresponding per particle energies can be visualized.
+
+After a certain number of steps, the thermostat is switched off, and the system is allowed to equilibrate.
+
+The script computes the per atom kinetic energy, bond energy, and total energy. 
+
+Idea would be to sample the histogram of per particle energies and show how this starts as two peaks
+and ends up as one peak when the system is equilibrated.
+
+I get a segmentation fault when running the simulation, so need to check whether this also happens for
+the standard LAMMPS version.
