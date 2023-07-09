@@ -1,12 +1,40 @@
 Simulation of a 2D lattice where the temperature of the right and left lattice can be controlled and the
 corresponding per particle energies can be visualized.
 
-After a certain number of steps, the thermostat is switched off, and the system is allowed to equilibrate.
+Simulation:
+   steps   movie   dynamics
+     1000    2%    steps at zero temperature nothing moves.
+     9000   18%    steps where the two lattices are in contact with a hot (T=1.9) and cold (T=0.1) thermostat.
+    40000   80%    steps where the thermostats are removed, and the system is allowed to evolve with
+                   Newtonian dynamics.
+           
+Outputs are:
+     movie.avi   movie showing dynamics with atom types of the lattices and boundary
+     ekin.avi    movie showing dynamics with a color code based on the kinetic energy of the atoms
+     ebond.avi   movie showing dynamics with a color code based on the bond energy of the atoms
+     etot.avi    movie showing dynamics with a color code based on the total energy energy of the atoms.
+     
+     The same colour code is use in the three simulations.
 
-The script computes the per atom kinetic energy, bond energy, and total energy. 
+     energy.t    file with tabulated energies
+         Column 1 : timestep
+         Column 2 : average energy per atom
+         Column 3 : average energy per left atom
+         Column 4 : average energy per right atom
+         Column 5 : average kinetic energy per left atom
+         Column 6 : average bond energy per left atom
+         Column 7 : average kinetic energy per right atom
+         Column 8 : average bond energy per right atom         
 
-Idea would be to sample the histogram of per particle energies and show how this starts as two peaks
-and ends up as one peak when the system is equilibrated.
 
-I get a segmentation fault when running the simulation, so need to check whether this also happens for
-the standard LAMMPS version.
+I have fixed 2% randomly chosen lattice positions, this is to scatter phonons to ensure better mixing.
+
+This is an ideal spring model, and hence the dynamics can be regarded as a superposition of vibration modes.
+These vibration modes have a certain energy when the thermostat is switched off, and and due to the vibration
+modes not exchanging energy, the lattice does not redistribute this energy with other modes leading to poor
+mixing, such that potentially we can risk energy not being equipartitioned on all the systems degrees of freedom.
+
+What is missing here is some element of randomness / non-linearity or larger system size to ensure modes
+are well mixed.
+
+

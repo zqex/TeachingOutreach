@@ -3,14 +3,19 @@
 use LammpsConf;
 my $config=LammpsConf->new();
 
-my $nlattice=40;
-
+my $nx=40;
+my $ny=40;
+my $yw=4;
 my $dim=2;
 
+#
+#    Creates two nxXnx lattices with a boundary between them, and a boundary between them.
+#    The boundary has a hole allowing energy to flow between the two lattices.
+#
+#
 
-
-$config->SetBoxX( -($nlattice+1)*1.1   , ($nlattice+1)*1.1   );
-$config->SetBoxY( -($nlattice+1)/2*1.1 , ($nlattice+1)/2*1.1 );
+$config->SetBoxX( -($nx+1)*1.1   , ($nx+1)*1.1   );
+$config->SetBoxY( -($nx+1)/2*1.1 , ($nx+1)/2*1.1 );
 $config->SetBoxZ( -0.1 , 0.1 );
 
 $config->SetAtomTypes(3);
@@ -20,36 +25,27 @@ $config->SetAtomTypes(3);
 
 my @vertices;
 
-# type 1
-for (my $x= -$nlattice-0.5 ; $x<=-0.5 ; $x++)
+for (my $x=-$nx-1 ; $x<=$nx+1; $x++)
 {
-  for (my $y= -$nlattice/2 ; $y<=$nlattice/2 ; $y++)
-    {
-       push @vertices,[$x,$y,1];
-    }
+   for (my $y=-$ny/2-1 ; $y<=$ny/2+1; $y++)
+     {
+        my $type=3;   #boundary
+        
+        $type=1 if ($x<0);   #left
+        $type=2 if ($x>0);   #right
+
+        $type=1 if ($x==0 and $y>=0 and $y<=$yw);   #beads in window
+        $type=2 if ($x==0 and $y<0  and $y>=-$yw);   #beads in window
+
+        $type=3 if ($x<-$nx or $x>$nx);             #fix sides to type 3
+        $type=3 if ($y<-$ny/2 or $y>$ny/2);         #fix top and bottom to type 3
+
+        $type=3 if (rand()<0.02);                   # random vertices fixed to scatter phonons.
+ 
+        push @vertices,[$x,$y,$type];
+     }
 }
 
-# type 2
-for (my $x= 0.5 ; $x<=$nlattice+0.5 ;  $x++)
-{
-  for (my $y= -$nlattice/2 ; $y<=$nlattice/2 ; $y++)
-    {
-       push @vertices,[$x,$y,2];
-    }
-}
-
-# type 3
-for (my $x= -$nlattice-0.5-1 ; $x<=$nlattice+0.5+1;  $x++)
-{
-  push @vertices,[$x,-$nlattice/2-1,3];
-  push @vertices,[$x, $nlattice/2+1,3];
-}
-
-  for (my $y= -$nlattice/2 ; $y<=$nlattice/2 ; $y++)
-{
-  push @vertices,[-$nlattice-0.5-1, $y,3];
-  push @vertices,[+$nlattice+0.5+1, $y,3];
-}
 
 print "Number of vertices created: ".(scalar(@vertices))."\n";
 my $m=$config->AddMolecule();
@@ -69,10 +65,10 @@ for (my $i=0 ; $i<scalar(@vertices); $i++)
         my ($x2,$y2,$type2)=@{$vertices[$j]};
 
         $config->AddBond($atommap[$i],$atommap[$j],1) 
-           if ( abs( sqrt( ($x2-$x1)**2+($y2-$y1)**2 ) -1 )<1e-3);
+           if ( abs( sqrt( ($x2-$x1)**2+($y2-$y1)**2 ) -1 )<1e-3);           
      }
 }
 
 $config->SetTimeStep(0);
-$config->SaveInput("lattice$nlattice.input.gz");
+$config->SaveInput("lattice$nx.input.gz");
 

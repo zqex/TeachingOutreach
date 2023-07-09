@@ -3,11 +3,8 @@
 #
 #
 
-#number of steps to perform the deformation
-variable  nrun   equal 10000
-
-variable templeft  equal 0.5
-variable tempright equal 2.0
+variable templeft  equal 0.1
+variable tempright equal 1.9
 
 variable  inputfile string "lattice40.input.gz"
 
@@ -24,7 +21,7 @@ units              lj
 dimension          2
 atom_style         bond
 
-neighbor           4.0 bin
+neighbor           3.0 bin
 neigh_modify       every 1 delay 0 check yes
 
 read_data ${inputfile}
@@ -38,7 +35,7 @@ group gright     type 2
 group gboundary  type 3
 group gmobile    type 1 2
 
-pair_style         zero 4.0
+pair_style         zero 3.0
 pair_coeff         * *
 
 bond_style         harmonic
@@ -46,40 +43,102 @@ variable           klammps equal 0.5*${kspring}
 bond_coeff         * ${klammps} ${keq}
 
 
+#
+# Computes for visualization. This produces a per-atom kinetic, potential and total energy. The latter being an atomic variable
+# which is the sum of the preceeding computes.
+#
+
+compute ekin   all   ke/atom
+compute ebond  all   pe/atom bond
+variable eatom atom  c_ekin+c_ebond
 
 #shell mkdir img
-dump        visualization gvis movie 200    motion.avi   type type   adiam 1.0  bond atom 1.0  zoom 1.8  view 0 0  size 1024 768
-dump_modify visualization pad 6 first yes
+dump        visualization gvis movie 50    motion.avi   type type   adiam 0.5  bond atom 0.5  zoom 2.3  view 0 0  size 1024 768
+dump_modify visualization pad 6 first yes  acolor 1 red acolor 2 blue  acolor 3 black
 
-compute ekin  all ke/atom
-dump        visualization2 gvis movie 200    ekin.avi   c_ekin type   adiam 1.0  bond atom 1.0  zoom 1.8  view 0 0  size 1024 768
+dump        visualization2 gvis movie 50    ekin.avi   c_ekin type   adiam 1.0  bond atom 1.0  zoom 2.3  view 0 0  size 1024 768
 dump_modify visualization2 backcolor white  boxcolor black pad 6  first yes
-dump_modify visualization2 amap 0 16 ca 0.0 4 min blue 4.0 red 9.0 orange max white
+dump_modify visualization2 amap 0 16 ca 0.0    5 min black 0.2 blue 3.0 red 5.0 orange max white
 
-compute ebond  all pe/atom bond
-dump        visualization3 gvis movie 200    ebond.avi   c_ebond type   adiam 1.0  bond atom 1.0  zoom 1.8  view 0 0  size 1024 768
+dump        visualization3 gvis movie 50    ebond.avi   c_ebond type   adiam 1.0  bond atom 1.0  zoom 2.3  view 0 0  size 1024 768
 dump_modify visualization3 backcolor white  boxcolor black pad 6  first yes
-dump_modify visualization3 amap 0 16 ca 0.0 4 min blue 4.0 red 9.0 orange max white
+dump_modify visualization3 amap 0 16 ca 0.0    5 min black  0.2 blue 3.0 red 5.0 orange max white
 
-variable eatom  atom  c_ekin+c_ebond
-dump        visualization4 gvis movie 200    eatom.avi   v_eatom type   adiam 1.0  bond atom 1.0  zoom 1.8  view 0 0  size 1024 768
+dump        visualization4 gvis movie 50    eatom.avi   v_eatom type   adiam 1.0  bond atom 1.0  zoom 2.3  view 0 0  size 1024 768
 dump_modify visualization4 backcolor white  boxcolor black pad 6  first yes
-dump_modify visualization4 amap 0 16 ca 0.0 4 min blue 4.0 red 9.0 orange max white
+dump_modify visualization4 amap 0 16 ca 0.0    5 min black  0.2 blue 3.0 red 5.0 orange max white
 
+#
+# amap args = lo hi style delta N entry1 entry2 ... entryN
+#
+#  lo = number or min = lower bound of range of color map
+#  hi = number or max = upper bound of range of color map
+#
+#  style = 2 letters = c or d or s plus a or f
+#    c for continuous
+#    d for discrete
+#    s for sequential
+#    a for absolute
+#    f for fractional
+#  delta = binsize (only used for style s, otherwise ignored)
+#    binsize = range is divided into bins of this width
+#
+#  N = # of subsequent entries
+#  entry = value color (for continuous style)
+#    value = number or min or max = single value within range
+#    color = name of color used for that value
+#
+#  amap 0 16 ca 0.0   means    colormap for values 0..16 using continuous color map between the abosolute values.  0.0 is ignored.
+#
+#   5 min black  0.1 blue 4.0 red 9.0 orange max white
+#
+#   5 colors is to follow
+#     min is black  (minimum of range)
+#                0.1 is blue
+#                         4.0 is red
+#                                 9.0 orange
+#                                            max is white  (maximal value of range)
+#
+#
+#   We would expect the <ebond^2> = <ekin^2> = kT   due to equipartition, hence a Gaussian distribution of energies.
+#
+#
+
+#
+# Need to sum the per-atom energies into an average energy for the two domains.
+#
+
+compute avgekinright    gright  reduce  ave c_ekin
+compute avgebondright   gright  reduce  ave c_ebond
+compute avgekinleft     gleft   reduce  ave c_ekin
+compute avgebondleft    gleft   reduce  ave c_ebond
+ 
+variable avgeright equal c_avgekinright+c_avgebondright
+variable avgeleft  equal c_avgekinleft+c_avgebondleft
+variable avge      equal v_avgeright+v_avgeleft
+fix save all ave/time 5 100 500   v_avge   v_avgeleft v_avgeright   c_avgekinleft   c_avgebondleft c_avgekinright c_avgebondright file energy.time  title1  "#timestep   etot etot_left  etot_right   ekin_left ebond_left e_kin_right ebond_right"
+
+#
+#  Run 1000 steps without a thermostat. Zero energy everywhere.
+#
+
+fix integrator   gmobile nve
+thermo     100
+thermo_style custom   step    v_avge   v_avgeleft v_avgeright   c_avgekinleft   c_avgebondleft c_avgekinright c_avgebondright
+timestep 0.01
+
+run 1000
 
 
 #
 #  Create two different temperature left and right.
 #
 
-fix integrator   gmobile nve
-fix thermostat1  gleft   langevin  ${templeft}  ${templeft}      1.0  ${SEED1}
-fix thermostat2  gright  langevin  ${tempright} ${tempright}     1.0  ${SEED2}
 
-thermo     100
-timestep 0.01
+fix thermostat1  gleft   langevin  ${templeft}  ${templeft}      10  ${SEED1}
+fix thermostat2  gright  langevin  ${tempright} ${tempright}     10  ${SEED2}
 
-run ${nrun}
+run 9000
 
 #
 #  Now let temperature equlibrate
@@ -88,7 +147,7 @@ run ${nrun}
 unfix thermostat1
 unfix thermostat2
 
-run ${nrun}
+run 40000
 
 
 
