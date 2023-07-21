@@ -1,0 +1,26 @@
+LAMMPS Simulation of a 2D model of liquid crystals. LCs are modelled as rods of 5 beads.
+
+This does currently not work? Atleast I have not seen clear global nematic order, the relaxation times may be long or the potentials
+may require tuning and tweaking.
+
+I tried soft interactions between beads, which are purely repulsive U(r) = A cos(pi r/(2Rc))  potential, which is numerically well behaved.
+Hard rods are described by Onsager theory, and should show nematic order at high densities. I tried 100,200,300,400 molecules, in the high
+density systems rods pack nematically, but no global nematic order appers. Relaxation times may be too long for such a short simulation.
+
+Then I thought perhaps alignment is inceased if there is an attrative interaction along the rods corresponding to the logic of
+Mayer-Saupe theory. Lennard-Jones does that, but is not numerically well behaved due to strong repulsion at short distances. Hence I thought
+of one of the soft core versions of LJ that LAMMPS has implemented.
+
+This does not really work either, rods appears to pack parallel and it does not crash. But parameters of the potential has to be tuned if this
+should produce global nematic order during a short simulation.
+
+I thought of cheating. We could change the type of the first and last beads of the rods, and apply two external forces in opposite directions
+to align the molecules. But it would always align in the same direction, which is also annoying.  lc_polar.tem is a template that adds different
+types of beads for the head/tail and LiquidCrystal2D_pull.lam applies forces -2x and +2x to the head/tail where x is a unit vector along x.
+This helps in making the nematic order happen, but there are funky defects due overlapping molecules, because the soft potentials are flat at r=0,
+and hence does not provide a force to push particles that are on top of each other away.
+
+
+
+pair_style lj/cut/soft   requires LAMMPS compiled with FEP package.
+

@@ -39,8 +39,8 @@ variable avgb2   equal 1                    # <b^2>
 variable kspring equal 3*${kT}/${avgb2}     # required by given <b^2>
 variable mass    equal 1
 
-#this is the force applied to the end of each chain:
-variable fx    equal 0.1
+#this is the force applied to the end of each chain:  (try e.g. 0.2, 0.5, 1.0)
+variable fx    equal 1.0
 
 variable input  string "pull_polymers_100chains_30bonds.input"
 variable output string "average_x_ends_fx${fx}.t"
