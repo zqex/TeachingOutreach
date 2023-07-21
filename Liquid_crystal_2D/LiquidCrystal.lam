@@ -11,10 +11,10 @@
 #
 
 #
-#  Number of molecules, try 100, 150, 200, 250
+#  Number of molecules, try 50, 100, 150, 200, 250
 #
 
-variable nmol  equal 250 
+variable nmol  equal 50 
 
 #temperature in reduced units (always use 1)
 variable temp equal 1.0
@@ -86,7 +86,7 @@ create_box 4 box bond/types 1  angle/types 1
 create_atoms 0 random ${nmol}  ${RND3} box mol liquidcrystal ${RND3}   rotate 0 0 0 1
 
 #visualize
-group vis type 1     #  all
+group vis type 1 2 3    #  all
 
 #all particles has mass 1
 mass   *        1
@@ -105,27 +105,40 @@ angle_coeff     * 100 180
 
 neigh_modify exclude  molecule/intra all
 
+#
+#compute cos(theta) = dx/bond length     where dx = x component of bond vector, bond length = 0.75
+#
+compute dx       all  bond/local dx    
+compute adx2     all  reduce avesq  c_dx                 # <bx^2>
+variable nematic equal c_adx2/${lbond}/${lbond}-0.5      # <cos(theta)^2>  = <bx^2>/length^2 
+
 #minimize energy of initial state
 minimize 1e-3 1e-3 1000 1000
 reset_timestep 0
 
+fix nematic all  ave/time 10 10 100     v_nematic  file ${basename}.nematic.txt
+
+
+#apply blue color to all beads.
+variable all   atom 1
+
 #make pictures
 shell mkdir ${basename}
 shell rm ${basename}/*.jpg
-dump        img vis  image  500 ${basename}/*.jpg    type type  bond type none adiam 1.0 zoom 1.7
+dump        img vis  image  500 ${basename}/*.jpg    v_all type  bond type none adiam 1.0 zoom 1.7
 dump_modify img acolor 1 red
 dump_modify img adiam  1 0.05
 dump_modify img backcolor white  boxcolor black
 dump_modify img pad 6
 
 #save video
-dump        video vis  movie  20 ${basename}.avi    type type  bond type none adiam 1.0 zoom 1.7
+dump        video vis  movie  20 ${basename}.avi    v_all type  bond type none adiam 1.0 zoom 1.7
 dump_modify video acolor 1 red
 dump_modify video adiam  1 0.05
 dump_modify video backcolor white  boxcolor black
 
 thermo    100
-thermo_style custom  step  temp  epair ebond   density 
+thermo_style custom  step  temp  epair ebond  v_nematic  density 
 
 #fixes for at køre simulation
 fix integrator all nve

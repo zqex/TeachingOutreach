@@ -110,10 +110,18 @@ angle_coeff     * 100 180
 
 neigh_modify exclude  molecule/intra all
 
+#
+#compute cos(theta) = dx/bond length     where dx = x component of bond vector, bond length = 0.75
+#
+compute dx       all  bond/local dx    
+compute adx2     all  reduce avesq  c_dx                 # <bx^2>
+variable nematic equal c_adx2/${lbond}/${lbond}-0.5      # <cos(theta)^2>  = <bx^2>/length^2 
+
 #minimize energy of initial state
 minimize 1e-3 1e-3 1000 1000
 reset_timestep 0
 
+fix nematic all  ave/time 10 10 100     v_nematic  file ${basename}.nematicalignx.txt
 
 #
 #  Here an external force is being applied to the ends of the molecules
