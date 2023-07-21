@@ -42,9 +42,9 @@ variable mass    equal 1
 #this is the force applied to the end of each chain:
 variable fx    equal 0.1
 
-variable input  string "pull_polymers_500chains_30bonds.input"
-variable output string "average_x_ends_f05.t"
-variable movie  string "moviefx0.1.avi"
+variable input  string "pull_polymers_100chains_30bonds.input"
+variable output string "average_x_ends_fx${fx}.t"
+variable movie  string "movie_fx${fx}.avi"
 
 
 #Langevin dynamics, friction is reduced compared to rouse simulation to accelerate dynamics.
@@ -107,7 +107,8 @@ dump        video vis  movie  100 ${movie}  v_color v_color adiam 0.9 zoom 1.6 v
 dump_modify video backcolor white  boxcolor black
 dump_modify video amap 1 20 sa 1 23 ${colors}
 
-dump        image vis  image  20000 *.jpg   v_color v_color adiam 0.9 zoom 2.9 view 0 270  size 768 512
+shell mkdir img
+dump        image vis  image  20000 img/*.jpg   v_color v_color adiam 0.9 zoom 2.9 view 0 270  size 768 512
 dump_modify image backcolor white  boxcolor black
 dump_modify image amap 1 20 sa 1 23 ${colors}
 dump_modify image pad 6
