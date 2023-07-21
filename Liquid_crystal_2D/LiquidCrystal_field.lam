@@ -115,7 +115,7 @@ neigh_modify exclude  molecule/intra all
 #
 compute dx       all  bond/local dx    
 compute adx2     all  reduce avesq  c_dx                 # <bx^2>
-variable nematic equal c_adx2/${lbond}/${lbond}-0.5      # <cos(theta)^2>  = <bx^2>/length^2 
+variable nematic equal 2*c_adx2/${lbond}/${lbond}-1      # <cos(theta)^2>  = <bx^2>/length^2 
 
 #minimize energy of initial state
 minimize 1e-3 1e-3 1000 1000
@@ -154,7 +154,7 @@ dump_modify video adiam  1 0.05
 dump_modify video backcolor white  boxcolor black
 
 thermo    100
-thermo_style custom  step  temp  epair ebond   density 
+thermo_style custom  step  temp  epair ebond  v_nematic  density 
 
 #fixes for at køre simulation
 fix integrator all nve
