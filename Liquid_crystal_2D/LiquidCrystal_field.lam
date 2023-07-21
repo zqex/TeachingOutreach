@@ -1,0 +1,160 @@
+#
+#  2D model of liquid crystals.
+# 
+#  Liquid crystals are modelled as rods of 8 beads.
+#  The initial conformation is nematic along the y axis
+#
+#  An extermal force is applied to the two ends of the rods to align it
+#  This a trick because we simulate polar molecules with different heads and tails,
+#  But this should be done with a proper external force that couple to the
+#  director of the liquid crystals.
+#
+#  Area of the molecule is calculated based on 8 beads with bonds of length 0.75
+#  and diameter of a bead = 1 from the soft interaction potential.
+#
+#  Due to the soft interactions, the effective radius is a bit smaller than this.
+#
+
+#
+#  Number of molecules, try 50, 100, 200
+#
+
+variable nmol  equal 200 
+
+#temperature in reduced units (always use 1)
+variable temp equal 1.0
+
+#Simulations box of 40 x 40
+variable lbox    equal 40
+
+variable nbead    equal 8
+variable diameter equal 1
+variable radius   equal ${diameter}/2
+variable lbond    equal 0.75
+variable length   equal ${lbond}*${nbead}
+
+#area of a single molecule
+variable molarea  equal 3.14159265*${radius}*${radius}+${radius}*${length}
+
+#aspect ratio
+variable aspect   equal ${length}/${diameter}
+
+#area fraction = area of all molecules  / area of simulation plane
+variable areafraction  equal ${nmol}*${molarea}/${lbox}/${lbox}
+
+#Onsager parameter
+variable onsager  equal ${aspect}*${areafraction}
+
+print "AreaFraction = ${areafraction}"
+print "Aspect ratio = ${aspect}"
+print "Onsager      = ${onsager}"
+
+#
+#  For a 3D lyotropic LC the isotropic to nematic transition is a onsager ~ 5
+#  I would expect the transition to be at smaller values in 2D.
+#
+
+#number of integration steps
+variable steps equal 20000
+
+variable basename string "liquidcrystal_alignx_M${nmol}"
+
+#seeds for random numbers
+variable RND1 equal 3523524
+variable RND2 equal 4634331
+variable RND3 equal 5734574
+variable RND4 equal 2342356
+variable RND5 equal 1352352
+
+#set up basic simulation stuff
+units		lj
+dimension       2
+boundary        p p p
+
+neighbor 0.5 bin
+neigh_modify every 1 delay 0 check yes
+
+#Generate box and system
+variable lhalf equal ${lbox}/2
+region box block -${lhalf} ${lhalf} -${lhalf} ${lhalf} -0.5 0.5
+
+molecule        liquidcrystal lc8.mol
+atom_style	template liquidcrystal
+
+#4 is number of types of atoms in the simulation
+create_box 4 box bond/types 1  angle/types 1
+
+#add liquid crystals,  
+#     rotate  <angle>   <nx> <ny> <nz>   is the angle and vector with which molecule templates are rotated.
+#     delete this to create an isotropic phase
+#
+create_atoms 0 random ${nmol}  ${RND3} box mol liquidcrystal ${RND3}   rotate 90 0 0 1
+
+#visualize
+group vis type 1 2 3    #  all
+
+#all particles has mass 1
+mass   *        1
+
+# soft repulsive interaction between all beads.
+
+pair_style         soft ${diameter}
+pair_coeff         * * 50
+
+#bonds are spring
+bond_style      harmonic
+bond_coeff      * 100 ${lbond}
+
+angle_style     harmonic
+angle_coeff     * 100 180
+
+neigh_modify exclude  molecule/intra all
+
+#minimize energy of initial state
+minimize 1e-3 1e-3 1000 1000
+reset_timestep 0
+
+
+#
+#  Here an external force is being applied to the ends of the molecules
+#  Pulling the ends in opposite directions. 
+# 
+
+group pull1 type 1
+group pull2 type 3
+
+fix addforce1 pull1 addforce  3 0 0
+fix addforce2 pull2 addforce -3 0 0
+
+
+#apply blue color to all beads.
+variable all   atom 1
+
+#make pictures
+shell mkdir ${basename}
+shell rm ${basename}/*.jpg
+dump        img vis  image  500 ${basename}/*.jpg    v_all type  bond type none adiam 1.0 zoom 1.7
+dump_modify img acolor 1 red
+dump_modify img adiam  1 0.05
+dump_modify img backcolor white  boxcolor black
+dump_modify img pad 6
+
+#save video
+dump        video vis  movie  20 ${basename}.avi    v_all type  bond type none adiam 1.0 zoom 1.7
+dump_modify video acolor 1 red
+dump_modify video adiam  1 0.05
+dump_modify video backcolor white  boxcolor black
+
+thermo    100
+thermo_style custom  step  temp  epair ebond   density 
+
+#fixes for at køre simulation
+fix integrator all nve
+fix langevin all langevin ${temp} ${temp} 0.5 ${RND5}
+fix 2d         all enforce2d
+
+# timestep
+timestep	0.01
+
+run ${steps}
+
