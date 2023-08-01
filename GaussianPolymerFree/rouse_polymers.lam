@@ -63,7 +63,7 @@ print "T= ${period}"                       # time scale of harmonic oscillation 
 print "Friction time scale = ${tdamp}"     # time scale for cross-over from ballistic to diffusive dynamics.
 
 #Simulation
-variable timestep equal 0.002
+variable timestep equal 0.001
 variable nrun     equal 10000000
 
 #random seeds
