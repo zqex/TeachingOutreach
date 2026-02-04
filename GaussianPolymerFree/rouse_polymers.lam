@@ -42,14 +42,14 @@
 variable temp   equal 1
 variable kT     equal 1*${temp}        # temperature kB T  in energy units
 variable Nspring equal 10
-variable input  string "rouse_polymers_100chains_10bonds.input"
+variable input  string "rouse_polymers_50chains_20bonds.input"
 
 #derive 2D spring constant
 variable bond2   equal 1                         # <b^2>
 variable kspring equal 2*${kT}/${bond2}          # dimension*kT/<b^2>
 
 #Langevin dynamics
-variable mass   equal 0.01                                     
+variable mass   equal 10                                     
 variable friction equal 1
 variable tdamp equal ${mass}/${friction}         # this is needed by LAMMPS
 
@@ -64,7 +64,7 @@ print "Friction time scale = ${tdamp}"     # time scale for cross-over from ball
 
 #Simulation
 variable timestep equal 0.001
-variable nrun     equal 10000000
+variable nrun     equal 100000
 
 #random seeds
 variable rnd1 equal 39523052

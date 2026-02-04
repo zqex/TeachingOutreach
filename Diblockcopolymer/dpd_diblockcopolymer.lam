@@ -72,7 +72,7 @@ neighbor        0.5   bin
 neigh_modify    delay 0 every 4 check yes
 comm_modify vel yes
 
-molecule        copol copolymer.mol
+molecule        copol dpd_diblockcopolymer.mol
 atom_style	template copol
 
 # define 3D box and create the a box with 2 types of particles.

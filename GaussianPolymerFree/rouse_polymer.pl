@@ -8,8 +8,8 @@ my $box=40;
 my $dim=2;
 my $b2=1;
 my $kT=1;
-my $nlen=11;   # beads
-my $npoly=100;
+my $nlen=21;   # beads
+my $npoly=50;
 
 my $k = $dim*$kT/$b2;
 
